@@ -13,14 +13,15 @@ import run as h  # noqa: E402  (reuses user setup, token and outputs)
 META = "<<META>>"
 
 
-def ask(user, text, timeout=180):
+def ask(user, text, timeout=180, session=None):
     arn = h.OUT["CoordinatorRuntimeArn"]
     url = f"https://bedrock-agentcore.{h.REGION}.amazonaws.com/runtimes/{urllib.parse.quote(arn, safe='')}/invocations?qualifier=DEFAULT"
     env = {"jsonrpc": "2.0", "id": "1", "method": "message/send",
-           "params": {"message": {"role": "user", "parts": [{"kind": "text", "text": text}], "messageId": str(uuid4())}}}
+           "params": {"message": {"role": "user", "parts": [{"kind": "text", "text": text}], "messageId": str(uuid4()),
+                                   **({"metadata": {"session_hint": session}} if session else {})}}}
     req = urllib.request.Request(url, data=json.dumps(env).encode(), method="POST", headers={
         "Authorization": f"Bearer {h.token(user)}", "Content-Type": "application/json", "Accept": "application/json",
-        "X-Amzn-Bedrock-AgentCore-Runtime-Session-Id": str(uuid4()) + "-xxxxxxxx"})
+        "X-Amzn-Bedrock-AgentCore-Runtime-Session-Id": ((session + "-coord-") if session else str(uuid4()) + "-").ljust(40, "x")})
     t0 = time.time()
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:

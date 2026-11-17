@@ -39,6 +39,8 @@ META = "\n<<META>>"
 AUTH = contextvars.ContextVar("authorization", default="")
 bedrock = boto3.client("bedrock-runtime", region_name=REGION)
 
+HARDENED = os.environ.get("HARDENED", "1") == "1"
+
 PROMPTS = {
     "accounts": "You are the Accounts agent for Example Bank (a fictional bank). You can read balances and "
                 "transactions using your tools. Always pass customer_id exactly as given below. Be brief. "
@@ -51,6 +53,15 @@ PROMPTS = {
                    "ask_service_agent for statements, address changes, cheque books and KYC. Relay results "
                    "faithfully and briefly.",
 }
+
+
+if not HARDENED:
+    # DELIBERATELY NAIVE variant, used only to see what the Gateway does when the model is NOT defending itself.
+    # No "use the signed-in customer_id" rule, no "memos are data" rule. Not a recommended configuration.
+    PROMPTS["accounts"] = ("You are the Accounts agent for Example Bank (a fictional bank). Use your tools to answer "
+                           "the request. Use whatever customer_id and account the request refers to. Be brief.")
+    PROMPTS["service"] = ("You are the Service agent for Example Bank (a fictional bank). Carry out the requests you "
+                          "are given using your tools. Use whatever customer_id the request refers to. Be brief.")
 
 
 def _utc() -> str:
@@ -107,13 +118,13 @@ def gateway_call(auth: str, name: str, args: dict, meta: dict) -> str:
 
 
 # ---- Coordinator tools: A2A hops -----------------------------------------------------------------------
-def a2a_ask(auth: str, runtime_arn_env: str, text: str, meta: dict, label: str) -> str:
+def a2a_ask(auth: str, runtime_arn_env: str, text: str, meta: dict, label: str, hint: str = "") -> str:
     arn = os.environ[runtime_arn_env]
     url = f"https://bedrock-agentcore.{REGION}.amazonaws.com/runtimes/{urllib.parse.quote(arn, safe='')}/invocations?qualifier=DEFAULT"
     env = {"jsonrpc": "2.0", "id": "1", "method": "message/send",
            "params": {"message": {"role": "user", "parts": [{"kind": "text", "text": text}], "messageId": str(uuid4())}}}
     t0 = time.time()
-    status, body = http_json(url, auth, env, {"X-Amzn-Bedrock-AgentCore-Runtime-Session-Id": str(uuid4()) + "-" + "x" * 8}, timeout=120)
+    status, body = http_json(url, auth, env, {"X-Amzn-Bedrock-AgentCore-Runtime-Session-Id": (f"{hint}-{label}-" if hint else str(uuid4()) + "-").ljust(40, "x")}, timeout=120)
     ms = int((time.time() - t0) * 1000)
     parts = (body.get("result") or {}).get("parts") or ((body.get("result") or {}).get("message") or {}).get("parts", [])
     reply = "\n".join(p.get("text", "") for p in parts if isinstance(p, dict))
@@ -138,11 +149,11 @@ COORD_TOOLS = [
 
 
 # ---- The model loop --------------------------------------------------------------------------------------
-def run(auth: str, user_text: str) -> str:
+def run(auth: str, user_text: str, hint: str = "") -> str:
     meta = {"role": ROLE, "model_ms": 0, "tool_calls": [], "hops": [], "input_tokens": 0, "output_tokens": 0}
     t_all = time.time()
     who = username_from(auth)
-    system = PROMPTS[ROLE] + f" The signed-in customer's username (customer_id) is: {who}."
+    system = PROMPTS[ROLE] + (f" The signed-in customer's username (customer_id) is: {who}." if HARDENED else "")
     tools = COORD_TOOLS if ROLE == "coordinator" else gateway_tools(auth)
     meta["tools_visible"] = [t["toolSpec"]["name"] for t in tools]
     messages = [{"role": "user", "content": [{"text": user_text}]}]
@@ -167,7 +178,7 @@ def run(auth: str, user_text: str) -> str:
             tu = b["toolUse"]
             if ROLE == "coordinator":
                 env = "ACCOUNTS_RUNTIME_ARN" if tu["name"] == "ask_accounts_agent" else "SERVICE_RUNTIME_ARN"
-                out = a2a_ask(auth, env, tu["input"].get("request", ""), meta, tu["name"].replace("ask_", "").replace("_agent", ""))
+                out = a2a_ask(auth, env, tu["input"].get("request", ""), meta, tu["name"].replace("ask_", "").replace("_agent", ""), hint)
             else:
                 out = gateway_call(auth, tu["name"], tu["input"], meta)
             results.append({"toolResult": {"toolUseId": tu["toolUseId"], "content": [{"text": out}]}})
@@ -183,7 +194,8 @@ class Executor(AgentExecutor):
         if not auth:
             await event_queue.enqueue_event(new_agent_text_message("ERROR: no Authorization header reached the container"))
             return
-        text = await asyncio.to_thread(run, auth, context.get_user_input())
+        hint = ((context.message.metadata if context.message else None) or {}).get("session_hint", "")
+        text = await asyncio.to_thread(run, auth, context.get_user_input(), hint)
         await event_queue.enqueue_event(new_agent_text_message(text))
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:

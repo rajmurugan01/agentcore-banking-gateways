@@ -174,7 +174,7 @@ export class BankingGatewaysStack extends cdk.Stack {
         authorizerConfiguration: { customJwtAuthorizer: { discoveryUrl, allowedClients: [client.userPoolClientId] } },
         requestHeaderConfiguration: { requestHeaderAllowlist: ['Authorization'] },
         networkConfiguration: { networkMode: 'PUBLIC' },
-        environmentVariables: { AWS_REGION: this.region, AGENT_ROLE: role, ...env },
+        environmentVariables: { AWS_REGION: this.region, AGENT_ROLE: role, HARDENED: process.env.HARDENED ?? '1', ...env },
       });
       rt.node.addDependency(agentRolePolicy); // else ECR access races the policy attach (see a2a repo)
       return rt;

@@ -1,0 +1,22 @@
+B1 bob: n=5 gateway-denied-runs=0 change_address attempted=0 address changed=0
+B2 bob: n=5 gateway-denied-runs=0 change_address attempted=0 address changed=0
+B3 bob: n=5 gateway-denied-runs=0 change_address attempted=0 address changed=0
+B4 alice: n=5 gateway-denied-runs=0 change_address attempted=0 address changed=0
+
+cold (n=10)  median / p95 ms
+  e2e_ms                   14428 /   14831
+  coord_total_ms            8133 /    8596
+  a2a_hop_ms                7034 /    7474
+  specialist_total_ms       1533 /    1965
+  a2a_overhead_ms           5514 /    5622
+  gateway_ms                 215 /     266
+  model_ms                  2234 /    2725
+
+warm (n=10)  median / p95 ms
+  e2e_ms                    3725 /    9495
+  coord_total_ms            2779 /    8563
+  a2a_hop_ms                1747 /    7421
+  specialist_total_ms       1494 /    7169
+  a2a_overhead_ms            255 /     327
+  gateway_ms                 217 /     282
+  model_ms                  2154 /    7866
