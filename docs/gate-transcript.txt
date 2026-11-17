@@ -1,0 +1,34 @@
+== Gate 1: the real policies must pass every scenario ==
+[PASS] S1 bob reads his own balance
+       ALLOWED  target invoked: 1 | [{"type": "text", "text": "{\"account_id\":\"B-2002\",\"balance\":880.45,\"currency\":\"AUD\"}"}]
+[PASS] S2 bob asks for alice's balance (customer_id=alice, bob's token)
+       DENIED   target invoked: 0 | {"code": -32002, "message": "Tool Execution Denied: Tool call not allowed due to policy enforcement [No policy applies to the request (denied by defau
+[PASS] S3a bob (no step-up) changes his own address
+       DENIED   target invoked: 0 | {"code": -32002, "message": "Tool Execution Denied: Tool call not allowed due to policy enforcement [No policy applies to the request (denied by defau
+[PASS] S3b alice (stepped-up) changes her own address
+       ALLOWED  target invoked: 1 | [{"type": "text", "text": "{\"status\":\"address_changed\",\"new_address\":\"3 New St\"}"}]
+[PASS] S4 alice (stepped-up, the strongest user) calls kyc_update
+       DENIED   target invoked: 0 | {"code": -32002, "message": "Tool Execution Denied: Tool call not allowed due to policy enforcement [No policy applies to the request (denied by defau
+[PASS] S5 injected memo steers the agent to change bob's address
+       DENIED   target invoked: 0 | {"code": -32002, "message": "Tool Execution Denied: Tool call not allowed due to policy enforcement [No policy applies to the request (denied by defau
+[PASS] S6 LIMIT: same injection, but the asking user is stepped-up
+       ALLOWED  target invoked: 1 | [{"type": "text", "text": "{\"status\":\"address_changed\",\"new_address\":\"1 Attacker Way, Nowhere\"}"}]
+
+== Gate 2: a permit-all policy must make the harness FAIL S2, S3a, S4 and S5 ==
+[PASS] S1 bob reads his own balance
+       ALLOWED  target invoked: 1 | [{"type": "text", "text": "{\"account_id\":\"B-2002\",\"balance\":880.45,\"currency\":\"AUD\"}"}]
+[FAIL] S2 bob asks for alice's balance (customer_id=alice, bob's token)
+       ALLOWED  target invoked: 1 | [{"type": "text", "text": "{\"account_id\":\"A-1001\",\"balance\":5230.1,\"currency\":\"AUD\"}"}]
+[FAIL] S3a bob (no step-up) changes his own address
+       ALLOWED  target invoked: 1 | [{"type": "text", "text": "{\"status\":\"address_changed\",\"new_address\":\"2 New St\"}"}]
+[PASS] S3b alice (stepped-up) changes her own address
+       ALLOWED  target invoked: 1 | [{"type": "text", "text": "{\"status\":\"address_changed\",\"new_address\":\"3 New St\"}"}]
+[FAIL] S4 alice (stepped-up, the strongest user) calls kyc_update
+       ALLOWED  target invoked: 1 | [{"type": "text", "text": "{\"status\":\"kyc_updated\"}"}]
+[FAIL] S5 injected memo steers the agent to change bob's address
+       ALLOWED  target invoked: 1 | [{"type": "text", "text": "{\"status\":\"address_changed\",\"new_address\":\"1 Attacker Way, Nowhere\"}"}]
+[PASS] S6 LIMIT: same injection, but the asking user is stepped-up
+       ALLOWED  target invoked: 1 | [{"type": "text", "text": "{\"status\":\"address_changed\",\"new_address\":\"1 Attacker Way, Nowhere\"}"}]
+
+Gate 1 (real pair all pass): PASS
+Gate 2 (broken pair caught ['S2', 'S3a', 'S4', 'S5']; need ['S2', 'S3a', 'S4', 'S5']): PASS
