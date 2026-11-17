@@ -122,13 +122,15 @@ export class BankingGatewaysStack extends cdk.Stack {
       return gw;
     };
 
-    // The real pair, and a deliberately broken pair (permit-all) that exists only so the gate test can prove
+    // The real pair, and a deliberately broken pair (missing owner check) that exists only so the gate test can prove
     // the scenario harness notices a bad policy. Never point an agent at the broken pair.
     const accounts = makeGateway('Accounts', 'bank-accounts', 'accounts', ACCOUNTS_TOOLS, ['accounts.cedar']);
+    // kyc_update has no permit on purpose: default-deny. AgentCore rejects an unconditional forbid as
+    // "Overly Restrictive", so the human-only rule is the absence of a permit (and the lint guards it).
     const service = makeGateway('Service', 'bank-service', 'service', SERVICE_TOOLS,
-      ['service-own-customer.cedar', 'service-change-address.cedar', 'service-kyc-forbid.cedar']);
-    const accountsBroken = makeGateway('AccountsBroken', 'bank-accounts-broken', 'accounts', ACCOUNTS_TOOLS, ['fixtures/permit-all.cedar']);
-    const serviceBroken = makeGateway('ServiceBroken', 'bank-service-broken', 'service', SERVICE_TOOLS, ['fixtures/permit-all.cedar']);
+      ['service-own-customer.cedar', 'service-change-address.cedar']);
+    const accountsBroken = makeGateway('AccountsBroken', 'bank-accounts-broken', 'accounts', ACCOUNTS_TOOLS, ['fixtures/broken-accounts.cedar']);
+    const serviceBroken = makeGateway('ServiceBroken', 'bank-service-broken', 'service', SERVICE_TOOLS, ['fixtures/broken-service.cedar']);
 
     // --- Cost guard: this is a public demo in a personal account. -------------------------------------
     new budgets.CfnBudget(this, 'DemoBudget', {

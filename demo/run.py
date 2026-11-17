@@ -162,7 +162,7 @@ def main():
     if mode == "gates":
         print("== Gate 1: the real policies must pass every scenario ==")
         good = run_all(real())
-        print("\n== Gate 2: a permit-all policy must make the harness FAIL S2, S3a, S4 and S5 ==")
+        print("\n== Gate 2: a policy missing the owner check must make the harness FAIL S2, S3a, S4 and S5 ==")
         bad = run_all(broken())
         caught = {r["id"] for r in bad if not r["ok"]}
         g1, g2 = all(r["ok"] for r in good), MUST_DENY <= caught
