@@ -7,6 +7,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as budgets from 'aws-cdk-lib/aws-budgets';
+import * as ecrAssets from 'aws-cdk-lib/aws-ecr-assets';
 import * as agentcore from 'aws-cdk-lib/aws-bedrockagentcore';
 
 const POLICY_DIR = path.join(__dirname, '..', '..', 'policies');
@@ -132,6 +133,57 @@ export class BankingGatewaysStack extends cdk.Stack {
     const accountsBroken = makeGateway('AccountsBroken', 'bank-accounts-broken', 'accounts', ACCOUNTS_TOOLS, ['fixtures/broken-accounts.cedar']);
     const serviceBroken = makeGateway('ServiceBroken', 'bank-service-broken', 'service', SERVICE_TOOLS, ['fixtures/broken-service.cedar']);
 
+    // --- Agents: ONE image, three AgentCore Runtimes (A2A). The user's Cognito token is the inbound bearer; ------
+    // the Authorization header is allow-listed through to the container so it can be forwarded, not replaced.
+    const image = new ecrAssets.DockerImageAsset(this, 'AgentImage', {
+      directory: path.join(__dirname, '../../agents'),
+      platform: ecrAssets.Platform.LINUX_ARM64, // AgentCore Runtime is arm64-only
+    });
+    const agentRole = new iam.Role(this, 'AgentRole', {
+      assumedBy: new iam.ServicePrincipal('bedrock-agentcore.amazonaws.com', {
+        conditions: {
+          StringEquals: { 'aws:SourceAccount': this.account },
+          ArnLike: { 'aws:SourceArn': `arn:aws:bedrock-agentcore:${this.region}:${this.account}:*` },
+        },
+      }),
+    });
+    agentRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents', 'logs:DescribeLogStreams'],
+      resources: ['*'],
+    }));
+    // Haiku 4.5 is reached through a cross-Region "us." inference profile: both resource types are needed.
+    agentRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['bedrock:InvokeModel', 'bedrock:InvokeModelWithResponseStream'],
+      resources: ['arn:aws:bedrock:*::foundation-model/*', 'arn:aws:bedrock:*:*:inference-profile/*'],
+    }));
+    agentRole.addToPolicy(new iam.PolicyStatement({ actions: ['ecr:GetAuthorizationToken'], resources: ['*'] }));
+    agentRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['bedrock-agentcore:GetWorkloadAccessToken', 'bedrock-agentcore:GetWorkloadAccessTokenForJWT'],
+      resources: ['*'],
+    }));
+    image.repository.grantPull(agentRole);
+    const agentRolePolicy = agentRole.node.findChild('DefaultPolicy');
+    const discoveryUrl = `https://cognito-idp.${this.region}.amazonaws.com/${pool.userPoolId}/.well-known/openid-configuration`;
+    const makeRuntime = (key: string, name: string, role: string, env: Record<string, string>) => {
+      const rt = new agentcore.CfnRuntime(this, `${key}Runtime`, {
+        agentRuntimeName: name,
+        description: `Example Bank ${role} agent (demo, synthetic data)`,
+        roleArn: agentRole.roleArn,
+        protocolConfiguration: 'A2A',
+        agentRuntimeArtifact: { containerConfiguration: { containerUri: image.imageUri } },
+        authorizerConfiguration: { customJwtAuthorizer: { discoveryUrl, allowedClients: [client.userPoolClientId] } },
+        requestHeaderConfiguration: { requestHeaderAllowlist: ['Authorization'] },
+        networkConfiguration: { networkMode: 'PUBLIC' },
+        environmentVariables: { AWS_REGION: this.region, AGENT_ROLE: role, ...env },
+      });
+      rt.node.addDependency(agentRolePolicy); // else ECR access races the policy attach (see a2a repo)
+      return rt;
+    };
+    const accountsRt = makeRuntime('Accounts', 'bank_accounts_agent', 'accounts', { GATEWAY_URL: accounts.attrGatewayUrl });
+    const serviceRt = makeRuntime('Service', 'bank_service_agent', 'service', { GATEWAY_URL: service.attrGatewayUrl });
+    const coordinatorRt = makeRuntime('Coordinator', 'bank_coordinator_agent', 'coordinator', {
+      ACCOUNTS_RUNTIME_ARN: accountsRt.attrAgentRuntimeArn, SERVICE_RUNTIME_ARN: serviceRt.attrAgentRuntimeArn });
+
     // --- Cost guard: this is a public demo in a personal account. -------------------------------------
     new budgets.CfnBudget(this, 'DemoBudget', {
       budget: { budgetName: 'agentcore-banking-gateways', budgetType: 'COST', timeUnit: 'MONTHLY',
@@ -149,6 +201,7 @@ export class BankingGatewaysStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'ServiceGatewayUrl', { value: service.attrGatewayUrl });
     new cdk.CfnOutput(this, 'AccountsBrokenGatewayUrl', { value: accountsBroken.attrGatewayUrl });
     new cdk.CfnOutput(this, 'ServiceBrokenGatewayUrl', { value: serviceBroken.attrGatewayUrl });
+    new cdk.CfnOutput(this, 'CoordinatorRuntimeArn', { value: coordinatorRt.attrAgentRuntimeArn });
     new cdk.CfnOutput(this, 'LedgerTable', { value: ledger.tableName });
   }
 }

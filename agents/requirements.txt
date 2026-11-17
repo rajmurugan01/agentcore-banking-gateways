@@ -1,0 +1,4 @@
+boto3>=1.35.0
+# Pinned: a2a-sdk 1.x moved a2a.server.apps (see agentcore-a2a-incident-response for the same gotcha).
+a2a-sdk[http-server]==0.3.26
+uvicorn>=0.30.0
