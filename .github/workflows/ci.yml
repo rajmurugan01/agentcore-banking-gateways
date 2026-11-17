@@ -1,0 +1,19 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: cd cdk && npm ci
+      - run: python3 demo/lint_policies.py
+      - name: cdk synth (no AWS access needed)
+        run: cd cdk && npx cdk synth --quiet
+        env:
+          CDK_DEFAULT_ACCOUNT: "123456789012"
+          ALERT_EMAIL: "alerts@example.com"
