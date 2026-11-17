@@ -64,14 +64,14 @@ Cold means a new Runtime session per request. Most of the cold cost is session s
 
 1. **Policy on the user catches what the model might not, but cannot judge intent.** S6: a legitimately stepped-up user plus an injected instruction goes straight through. A high-risk tool needs a human confirmation step, which this repo does not build.
 2. **AgentCore validates policies and rejects the obvious bad ones.** An unconditional `forbid` was rejected as "Overly Restrictive" and a bare permit-all as "Overly Permissive". So `kyc_update` is protected by having no permit (default-deny), and the realistic bug is the one that gets through: a permit that checks an argument exists but never compares it to the token.
-3. **Gateway Policy decides on the JWT and the tool arguments only.** I found no documented Cedar attribute for the calling agent, so this repo does not bind the agent's identity. Per-agent scoping here is topology: the Accounts Gateway simply has no service tools.
+3. **The policies here decide on the JWT claims and the tool arguments only.** The docs expose JWT claims as tags on the user principal and document no dedicated attribute for the calling agent, and every agent here forwards the same user token, so this repo does not bind the agent's identity. An AWS sample binds an agent through a `client_id` tag on per-agent tokens (sample code, non-production). Per-agent scoping here is topology: the Accounts Gateway simply has no service tools.
 4. **The step-up is a stand-in.** A default Cognito access token has no MFA or step-up claim, so "step-up" is membership of a `stepped-up` group. It is not real MFA.
 
 ## Not tested
 
 - An agent-to-agent gateway (an allow-list proxy on the A2A hop). The decision at the tool hop is measured here; whether a gateway on the agent hop would change any outcome is not.
 - An LLM gateway, including Bedrock Guardrails at the Gateway.
-- Agent-identity binding in Cedar, and interceptor-added claims.
+- Agent-identity binding in Cedar, interceptor-added claims, and session-aware temporal policies (documented by AWS; GA status not established from the pages I read).
 - Anything beyond this topology, one model, one region, one day.
 
 ## Cost
