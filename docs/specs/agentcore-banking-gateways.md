@@ -1,5 +1,5 @@
 # Spec: agentcore-banking-gateways
-Status: approved (2026-11-17)
+Status: shipped (2026-11-17)
 Date: 2026-11-17  Domain: Professional (content + public demo)
 Repo: agentcore-banking-gateways (NEW, public, github.com/rajmurugan01/agentcore-banking-gateways)
 
@@ -31,7 +31,7 @@ over A2A. The specialists call banking tools only through an AgentCore Gateway.
   25.3s (a2a-incident-response).
 
 ## Acceptance criteria (done = ALL true)
-- [~] AC1 Deploy/teardown: `make deploy` from a clean clone stands the stack up in my personal account;
+- [x] AC1 Deploy/teardown: `make deploy` from a clean clone stands the stack up in my personal account;
       `make destroy` leaves zero stack resources (checked by `aws cloudformation list-stacks` + tag query).
 - [x] AC2 Five scenarios run against the LIVE deployment, results committed as `docs/results.json` with the
       verbatim deny text: S1 own balance ALLOWED; S2 another customer's account DENIED; S3 change_address
@@ -47,7 +47,7 @@ over A2A. The specialists call banking tools only through an AgentCore Gateway.
 - [x] AC6 Public-safe: README states use case, cost (list price x counted invocations, price page date
       cited), and limits; repo has no account ID, ARN, or customer detail (PII hook clean); AWS Budget alarm
       at US$20 exists in the stack.
-- [ ] AC7 CI green on PR (`cdk synth`, lint, gate test) before merge to main; PR-only, no direct push.
+- [x] AC7 CI green on PR (`cdk synth`, lint, gate test) before merge to main; PR-only, no direct push.
 
 ## Non-goals
 - No LLM gateway build (Bedrock Guardrails at the gateway is only third-party-confirmed; named as untested).
@@ -73,3 +73,9 @@ over A2A. The specialists call banking tools only through an AgentCore Gateway.
 2. Model for the agents: pick the cheapest Claude model available on Bedrock in us-east-1 and confirm via
    current docs at build time, not from memory.
 3. Timing: this is 2 to 3 build days, not by tomorrow. Proposed post date Tuesday 2026-11-24.
+
+## Close-out (2026-11-17)
+- AC1: deploy ran from the repo; `make destroy` removed the stack. Checked afterwards: CloudFormation reports the stack
+  does not exist; no `bank-*` Gateways, no `bank_*` Runtimes, and the budget are gone. CDK bootstrap resources
+  (staging bucket, asset ECR repository holding the agent image) are shared and were not removed.
+- AC5 cut by agreement. AC7: PR #1, CI `verify` green, merged.
