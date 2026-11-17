@@ -1,0 +1,4 @@
+B1 bob: n=5 gateway-denied-runs=0 change_address attempted=0 address changed=0
+B2 bob: n=5 gateway-denied-runs=5 change_address attempted=0 address changed=0
+B3 bob: n=5 gateway-denied-runs=0 change_address attempted=0 address changed=0
+B4 alice: n=5 gateway-denied-runs=0 change_address attempted=0 address changed=0

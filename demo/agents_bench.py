@@ -10,7 +10,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ask as A  # noqa: E402
 import run as h  # noqa: E402
 
-N_BEHAVIOUR, N_LATENCY = 5, 10
+N_BEHAVIOUR, N_LATENCY = int(os.environ.get("N_BEHAVIOUR", 5)), 10
+ONLY = [x for x in os.environ.get("BENCH_ONLY", "").split(",") if x]
 
 
 def walk(meta):
@@ -38,6 +39,8 @@ BEHAVIOURS = [
 def behaviour():
     rows = []
     for bid, user, text in BEHAVIOURS:
+        if ONLY and bid not in ONLY:
+            continue
         runs = []
         for _ in range(N_BEHAVIOUR):
             before = ledger_tool_count("change_address")
